@@ -1,14 +1,13 @@
 # src/data_loader.py
 
 import pandas as pd
+import numpy as np
 import hashlib
 import logging
 from typing import Tuple
 from src.config import config
 
-# -----------------------------
-# Logging configuration
-# -----------------------------
+
 logger = logging.getLogger("DataLoader")
 logger.setLevel(logging.INFO)
 
@@ -22,110 +21,101 @@ if not logger.handlers:
 
 
 class DataLoader:
-    """
-    Production-grade data loader for UNSW-NB15.
-    Handles:
-    - Validation
-    - Preprocessing
-    - Reproducibility
-    """
-
-    REQUIRED_COLUMNS = {"label"}
 
     def __init__(self):
         self.config = config
 
-    # =============================
-    # Public API
-    # =============================
-    def load_data(self) -> Tuple[pd.DataFrame, pd.DataFrame]:
-        """
-        Load and preprocess train & test datasets.
-        """
-        logger.info("Loading UNSW-NB15 datasets")
+    # =====================================================
+    # 5G FLOW LOADER
+    # =====================================================
 
-        train_df = self._safe_read_csv(self.config.UNSW_TRAIN_PATH)
-        test_df = self._safe_read_csv(self.config.UNSW_TEST_PATH)
+    def load_5g_flow_data(self, inject_attacks=True) -> pd.DataFrame:
 
-        logger.info(f"Train shape before processing: {train_df.shape}")
-        logger.info(f"Test  shape before processing: {test_df.shape}")
+        logger.info("Loading 5G flow dataset")
 
-        self._validate_schema(train_df)
-        self._validate_schema(test_df)
+        df = pd.read_csv(self.config.FLOW_DATASET_PATH)
 
-        train_df = self._preprocess(train_df)
-        test_df = self._preprocess(test_df)
+        logger.info(f"Original Flow Shape: {df.shape}")
 
-        logger.info("Dataset preprocessing completed")
+        # Drop Flow_ID if exists
+        if "Flow_ID" in df.columns:
+            df.drop(columns=["Flow_ID"], inplace=True)
 
-        self._log_dataset_fingerprint(train_df, dataset_type="train")
+        # Fill missing
+        df.fillna(0, inplace=True)
 
-        return train_df, test_df
+        if inject_attacks:
+            df = self._inject_synthetic_attacks(df)
+
+        self._log_dataset_fingerprint(df, "5G_FLOW")
+
+        return df
+
+    # =====================================================
+    # MULTI-CLASS ATTACK INJECTION
+    # =====================================================
+
+    def _inject_synthetic_attacks(self, df: pd.DataFrame) -> pd.DataFrame:
+
+        logger.info("Injecting synthetic multi-class attack patterns")
+
+        df = df.copy()
+        df["attack"] = 0  # 0 = normal
+
+        attack_ratio = 0.20
+
+        attack_indices = np.random.choice(
+            df.index,
+            size=int(len(df) * attack_ratio),
+            replace=False
+        )
+
+        for idx in attack_indices:
+
+            attack_type = np.random.choice(
+                ["dos", "flood", "packet_spike"]
+            )
+
+            if attack_type == "dos":
+                if "Total_Packets" in df.columns:
+                    df.loc[idx, "Total_Packets"] *= 8
+                df.loc[idx, "attack"] = 1
+
+            elif attack_type == "flood":
+                if "Total_Bytes" in df.columns:
+                    df.loc[idx, "Total_Bytes"] *= 6
+                df.loc[idx, "attack"] = 2
+
+            elif attack_type == "packet_spike":
+                if "Average_Packet_Size" in df.columns:
+                    df.loc[idx, "Average_Packet_Size"] *= 5
+                df.loc[idx, "attack"] = 3
+
+        logger.info(f"Injected {len(attack_indices)} multi-class attack samples")
+
+        return df
+
+    # =====================================================
+    # FEATURE / LABEL SPLIT
+    # =====================================================
 
     def get_features_and_labels(
         self, df: pd.DataFrame
     ) -> Tuple[pd.DataFrame, pd.Series]:
-        """
-        Split features (X) and labels (y).
-        """
+
         if "attack" not in df.columns:
-            raise RuntimeError("Label column 'attack' missing after preprocessing")
+            raise RuntimeError("Label column 'attack' missing")
 
         X = df.drop(columns=["attack"])
         y = df["attack"]
 
         return X, y
 
-    # =============================
-    # Internal helpers
-    # =============================
-    def _safe_read_csv(self, path):
-        try:
-            return pd.read_csv(path)
-        except FileNotFoundError:
-            logger.error(f"Dataset not found: {path}")
-            raise
-        except Exception as e:
-            logger.exception("Failed to read dataset")
-            raise
+    # =====================================================
+    # FINGERPRINT
+    # =====================================================
 
-    def _validate_schema(self, df: pd.DataFrame):
-        missing = self.REQUIRED_COLUMNS - set(df.columns)
-        if missing:
-            raise ValueError(f"Dataset missing required columns: {missing}")
-
-    def _preprocess(self, df: pd.DataFrame) -> pd.DataFrame:
-        # -----------------------------
-        # Feature mapping
-        # -----------------------------
-        df = df.rename(columns=self.config.FEATURE_MAPPING)
-
-        # -----------------------------
-        # Binary label creation
-        # -----------------------------
-        df["attack"] = df["label"].apply(lambda x: 0 if x == 0 else 1)
-        df.drop(columns=["label"], inplace=True)
-
-        # -----------------------------
-        # Drop non-numeric features
-        # -----------------------------
-        non_numeric = df.select_dtypes(include=["object"]).columns
-        df.drop(columns=non_numeric, inplace=True)
-
-        # -----------------------------
-        # Missing value handling
-        # -----------------------------
-        df.fillna(0, inplace=True)
-
-        return df
-
-    def _log_dataset_fingerprint(self, df: pd.DataFrame, dataset_type: str):
-        """
-        Hash dataset schema for reproducibility tracking.
-        """
+    def _log_dataset_fingerprint(self, df: pd.DataFrame, name: str):
         schema_str = ",".join(sorted(df.columns))
         fingerprint = hashlib.sha256(schema_str.encode()).hexdigest()[:12]
-
-        logger.info(
-            f"{dataset_type.upper()} dataset fingerprint: {fingerprint}"
-        )
+        logger.info(f"{name} dataset fingerprint: {fingerprint}")

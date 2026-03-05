@@ -1,27 +1,35 @@
-import argparse
-from src.config import config
+from src.slice_creator import SliceCreator
+from src.correlation.engine import CorrelationEngine
+from src.models.embb_model import EMBBModel
+from src.models.urllc_model import URLLCModel
+from src.models.miot_model import MIOTModel
 
-def main():
-    parser = argparse.ArgumentParser(description="5G Slice-Aware Security System")
-    parser.add_argument(
-        "--mode",
-        choices=["development", "simulation", "lab"],
-        default=config.mode,
-        help="Run mode"
-    )
-    args = parser.parse_args()
 
-    print("=" * 50)
-    print("5G Slice-Aware & Correlated Threat Detection")
-    print(f"Running Mode: {args.mode.upper()}")
-    print("=" * 50)
+def simulate_pipeline(sample_features):
 
-    if args.mode == "development":
-        print("Development mode initialized")
-    elif args.mode == "simulation":
-        print("Simulation mode initialized")
-    elif args.mode == "lab":
-        print("Lab mode initialized")
+    slice_creator = SliceCreator()
+    engine = CorrelationEngine()
 
-if __name__ == "__main__":
-    main()
+    slice_type = slice_creator.classify(sample_features)
+
+    if slice_type == "embb":
+        model = EMBBModel()
+    elif slice_type == "urllc":
+        model = URLLCModel()
+    else:
+        model = MIOTModel()
+
+    model.load()
+
+    prediction = model.predict([list(sample_features.values())])[0]
+
+    if prediction == 1:
+        event = engine.add_alert(
+            slice_type=slice_type,
+            attack_type="anomaly",
+            confidence=0.85,
+            features=sample_features
+        )
+
+        if event:
+            print("🚨 Coordinated Attack Detected:", event)

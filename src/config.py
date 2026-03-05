@@ -1,4 +1,5 @@
 # src/config.py
+
 import os
 from pathlib import Path
 
@@ -14,17 +15,22 @@ class Config:
     # =========================
     BASE_DIR = Path(__file__).resolve().parent.parent
     DATA_DIR = BASE_DIR / "data"
+    RAW_DIR = DATA_DIR / "raw"
     MODELS_DIR = DATA_DIR / "models"
 
     # =========================
-    # DATASET PATHS (UNSW-NB15)
+    # UNSW DATASET PATHS
     # =========================
-    UNSW_TRAIN_PATH = DATA_DIR / "raw" / "UNSW_NB15_training-set.csv"
-    UNSW_TEST_PATH = DATA_DIR / "raw" / "UNSW_NB15_testing-set.csv"
+    UNSW_TRAIN_PATH = RAW_DIR / "UNSW_NB15_training-set.csv"
+    UNSW_TEST_PATH = RAW_DIR / "UNSW_NB15_testing-set.csv"
+
+    # =========================
+    # 5G FLOW DATASET PATH
+    # =========================
+    FLOW_DATASET_PATH = RAW_DIR / "5g" / "flow_output1_v2.csv"
 
     # =========================
     # FEATURE MAPPING
-    # UNSW → 5G-LIKE FEATURES
     # =========================
     FEATURE_MAPPING = {
         "dur": "duration",
@@ -42,7 +48,7 @@ class Config:
     }
 
     # =========================
-    # SLICE CLASSIFICATION THRESHOLDS
+    # SLICE THRESHOLDS
     # =========================
     SLICE_THRESHOLDS = {
         "urllc": {
@@ -85,7 +91,7 @@ class Config:
     # =========================
     # CORRELATION ENGINE
     # =========================
-    CORRELATION_WINDOW = 5.0  # seconds
+    CORRELATION_WINDOW = 5.0
     MIN_SLICES_FOR_COORDINATION = 2
     CONFIDENCE_THRESHOLD = 0.7
 
@@ -110,5 +116,5 @@ class Config:
         return "lab" if self.is_lab_environment() else "development"
 
 
-# Global config instance
+# Global instance
 config = Config()

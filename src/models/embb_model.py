@@ -3,13 +3,16 @@
 from xgboost import XGBClassifier
 from src.models.base_model import BaseModel
 from src.config import config
+import numpy as np
 
 
 class EMBBModel(BaseModel):
-    def __init__(self, version: str = "v1.0"):
+
+    def __init__(self, version: str = "v2.0"):
         super().__init__("embb", version)
 
     def build_model(self):
+
         params = config.MODEL_PARAMS["embb"]
 
         return XGBClassifier(
@@ -19,5 +22,6 @@ class EMBBModel(BaseModel):
             objective="binary:logistic",
             eval_metric="logloss",
             random_state=42,
-            n_jobs=-1
+            n_jobs=-1,
+            scale_pos_weight=3  # IMPORTANT: handle class imbalance
         )

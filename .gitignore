@@ -120,3 +120,12 @@ runs/
 *.tmp
 *.swp
 *.bak
+
+# ==========================================
+# Project Runtime Artifacts
+# ==========================================
+alerts_log.json
+alerts/
+*.model
+*.xgb
+*.bin
